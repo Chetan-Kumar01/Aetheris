@@ -293,20 +293,37 @@ function StatCard({ label, target, badge, badgeStyle, trend, icon: Icon, iconBg,
     )
 }
 
-/* ── SHARED AUDIO CONTEXT (auto-resumes on first user gesture) ─── */
+/* ── SHARED AUDIO CONTEXT (eagerly initialized on first user gesture) ─── */
 let _audioCtx = null
-function getAudioCtx() {
-    if (!_audioCtx) {
-        _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-        // Auto-resume on any user gesture if suspended
-        const resume = () => {
-            if (_audioCtx && _audioCtx.state === 'suspended') _audioCtx.resume()
-        }
-        document.addEventListener('click', resume, { once: false })
-        document.addEventListener('keydown', resume, { once: false })
-        document.addEventListener('touchstart', resume, { once: false })
+let _audioReady = false
+
+function _initAudioCtx() {
+    if (_audioCtx) {
+        if (_audioCtx.state === 'suspended') _audioCtx.resume()
+        return
     }
-    if (_audioCtx.state === 'suspended') _audioCtx.resume()
+    try {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        _audioCtx.resume().then(() => { _audioReady = true })
+        // Play a silent buffer to fully unlock audio on iOS/Safari
+        const buf = _audioCtx.createBuffer(1, 1, 22050)
+        const src = _audioCtx.createBufferSource()
+        src.buffer = buf
+        src.connect(_audioCtx.destination)
+        src.start(0)
+    } catch (e) {
+        console.warn('AudioContext init failed', e)
+    }
+}
+
+// Eagerly warm up AudioContext on first user interaction
+;['click', 'keydown', 'touchstart'].forEach(evt =>
+    document.addEventListener(evt, _initAudioCtx, { once: false, passive: true })
+)
+
+function getAudioCtx() {
+    if (!_audioCtx) _initAudioCtx()
+    if (_audioCtx && _audioCtx.state === 'suspended') _audioCtx.resume()
     return _audioCtx
 }
 
