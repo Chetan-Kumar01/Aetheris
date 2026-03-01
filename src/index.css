@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gray-950: #030712;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #030712;
+  color: #f9fafb;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Live status pulsing dot ────────────────────────────── */
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+/* ── Scrollbar styling ──────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* ── Global micro-interactions ──────────────────────────── */
+button {
+  transition-property: transform, background-color, border-color, opacity, box-shadow;
+  transition-duration: 150ms;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+   Toggle by adding class "light" to <html>
+══════════════════════════════════════════════════════════ */
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Main backgrounds */
+html.light .bg-gray-950,
+html.light [class*="bg-gray-950"] {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .bg-gray-900 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-gray-800 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .bg-gray-700 {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .bg-gray-800\/50,
+html.light .bg-gray-800\/60,
+html.light .bg-gray-800\/70 {
+  background-color: rgba(241, 245, 249, 0.7) !important;
+}
+
+/* Border colors */
+html.light .border-gray-800 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .border-gray-700 {
+  border-color: #cbd5e1 !important;
+}
+
+html.light .border-gray-700\/40,
+html.light .border-gray-700\/30 {
+  border-color: rgba(203, 213, 225, 0.5) !important;
+}
+
+/* Text colors */
+html.light .text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-gray-100 {
+  color: #1e293b !important;
+}
+
+html.light .text-gray-200 {
+  color: #334155 !important;
+}
+
+html.light .text-gray-300 {
+  color: #475569 !important;
+}
+
+html.light .text-gray-400 {
+  color: #64748b !important;
+}
+
+html.light .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+html.light .text-gray-600 {
+  color: #64748b !important;
+}
+
+/* Scrollbar in light mode */
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
