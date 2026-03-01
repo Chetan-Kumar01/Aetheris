@@ -293,23 +293,34 @@ function StatCard({ label, target, badge, badgeStyle, trend, icon: Icon, iconBg,
     )
 }
 
-/* ── LIVE VITALS (dashboard overview, dynamic chart) ────── */
+/* ── SHARED AUDIO CONTEXT (auto-resumes on first user gesture) ─── */
+let _audioCtx = null
+function getAudioCtx() {
+    if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        // Auto-resume on any user gesture if suspended
+        const resume = () => {
+            if (_audioCtx && _audioCtx.state === 'suspended') _audioCtx.resume()
+        }
+        document.addEventListener('click', resume, { once: false })
+        document.addEventListener('keydown', resume, { once: false })
+        document.addEventListener('touchstart', resume, { once: false })
+    }
+    if (_audioCtx.state === 'suspended') _audioCtx.resume()
+    return _audioCtx
+}
+
 function playSpo2Alarm() {
     try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        const ctx = getAudioCtx()
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
-        // Distinct from nurse alarm (which is usually a harsh square wave around 440-880Hz)
-        // This is a higher-pitched triangle wave (e.g. 1000Hz) with a gentle fade
         osc.type = 'triangle'
         osc.frequency.setValueAtTime(1000, ctx.currentTime)
-
-        gain.gain.setValueAtTime(0.3, ctx.currentTime) // less abrasive
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-
         osc.connect(gain)
         gain.connect(ctx.destination)
-
         osc.start()
         osc.stop(ctx.currentTime + 0.3)
     } catch (e) { console.warn("Audio error", e) }
@@ -317,22 +328,15 @@ function playSpo2Alarm() {
 
 function playHRAlarm() {
     try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        const ctx = getAudioCtx()
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
-        // Distinct from SpO2: a rapid double-beep with a square wave (more urgent)
         osc.type = 'square'
-
-        // Beep 1
         osc.frequency.setValueAtTime(600, ctx.currentTime)
         gain.gain.setValueAtTime(0.4, ctx.currentTime)
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1)
-
-        // Beep 2
-        osc.frequency.setValueAtTime(600, ctx.currentTime + 0.15)
         gain.gain.setValueAtTime(0.4, ctx.currentTime + 0.15)
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25)
-
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.start()
@@ -347,33 +351,92 @@ function LiveVitals() {
     // Create random seed for initial static vitals based on patient ID, then simulate
     const vitals = useVitals(currentPatient?.id || 'demo')
 
-    // SpO2 drop alarm effect
+    // Cooldown ref to avoid flooding alerts (minimum 10s between alerts)
+    const lastAlertTime = React.useRef(0);
+
+    const maybeAlert = React.useCallback((alertData) => {
+        const now = Date.now();
+        if (now - lastAlertTime.current < 10000) return; // 10s cooldown
+        lastAlertTime.current = now;
+        if (addAlert) {
+            addAlert({
+                id: now.toString() + Math.random().toString(36).slice(2),
+                timestamp: new Date().toISOString(),
+                ...alertData,
+            });
+        }
+        // Auto-trigger nursing staff alert sound for warning/critical
+        if (alertData.type === 'critical' || alertData.type === 'warning') {
+            try {
+                const ctx = getAudioCtx()
+                const osc = ctx.createOscillator()
+                const gain = ctx.createGain()
+                osc.connect(gain)
+                gain.connect(ctx.destination)
+                osc.type = 'square'
+                // Urgent triple-beep nurse alert
+                osc.frequency.setValueAtTime(alertData.type === 'critical' ? 1200 : 800, ctx.currentTime)
+                gain.gain.setValueAtTime(0.5, ctx.currentTime)
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12)
+                // Beep 2
+                gain.gain.setValueAtTime(0.5, ctx.currentTime + 0.2)
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.32)
+                // Beep 3
+                gain.gain.setValueAtTime(0.5, ctx.currentTime + 0.4)
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.52)
+                osc.start()
+                osc.stop(ctx.currentTime + 0.6)
+            } catch (e) { console.warn("Nurse alert audio error", e) }
+        }
+    }, [addAlert]);
+
+    // SpO2 alarm effect — visual + audio
     const prevSpo2 = React.useRef(vitals.spo2);
     React.useEffect(() => {
-        if (vitals.spo2 < prevSpo2.current && vitals.spo2 < 96) {
+        if (vitals.spo2 < 94) {
             playSpo2Alarm();
+            maybeAlert({
+                type: 'critical',
+                title: 'CRITICAL: SpO\u2082 Desaturation',
+                message: `SpO\u2082 dropped to ${vitals.spo2}% — immediate attention required!`,
+            });
+        } else if (vitals.spo2 < 96 && vitals.spo2 < prevSpo2.current) {
+            playSpo2Alarm();
+            maybeAlert({
+                type: 'warning',
+                title: 'WARNING: SpO\u2082 Declining',
+                message: `SpO\u2082 trending down at ${vitals.spo2}%. Monitor closely.`,
+            });
         }
         prevSpo2.current = vitals.spo2;
-    }, [vitals.spo2]);
+    }, [vitals.spo2, maybeAlert]);
 
-    // HR drop alarm effect
+    // HR alarm effect — bradycardia, tachycardia, sudden change
     const prevHr = React.useRef(vitals.hr);
     React.useEffect(() => {
-        // Sudden drop of >5 bpm in one tick OR dropping below critical threshold (e.g., 60 bpm)
-        if ((prevHr.current - vitals.hr > 5) || vitals.hr < 60) {
+        if (vitals.hr < 60) {
             playHRAlarm();
-            if (addAlert) {
-                addAlert({
-                    id: Date.now().toString() + Math.random().toString(),
-                    type: 'critical',
-                    title: 'CRITICAL: Severe HR Drop',
-                    message: `Patient HR dropped suddenly to ${vitals.hr} bpm!`,
-                    timestamp: new Date().toISOString()
-                });
-            }
+            maybeAlert({
+                type: 'critical',
+                title: 'CRITICAL: Bradycardia Detected',
+                message: `Heart rate dropped to ${vitals.hr} bpm — below safe threshold!`,
+            });
+        } else if (vitals.hr > 105) {
+            playHRAlarm();
+            maybeAlert({
+                type: 'warning',
+                title: 'WARNING: Tachycardia Detected',
+                message: `Heart rate elevated to ${vitals.hr} bpm.`,
+            });
+        } else if (Math.abs(prevHr.current - vitals.hr) > 4) {
+            maybeAlert({
+                type: 'warning',
+                title: 'WARNING: Sudden HR Change',
+                message: `Heart rate changed rapidly from ${Math.round(prevHr.current)} to ${vitals.hr} bpm.`,
+            });
         }
         prevHr.current = vitals.hr;
-    }, [vitals.hr, addAlert]);
+    }, [vitals.hr, maybeAlert]);
 
     const chips = [
         { label: 'HR', value: `${vitals.hr} bpm`, icon: Heart, color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/30' },
@@ -449,8 +512,8 @@ function ActiveSurgeries() {
                     No patients loaded yet
                 </div>
             ) : (
-                <div className="space-y-3">
-                    {list.slice(0, 5).map(({ id, name, surgery_type, status, asa_class }, idx) => {
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                    {list.map(({ id, name, surgery_type, status, asa_class }, idx) => {
                         const displayStatus = status === 'in_progress' ? 'In Progress'
                             : status === 'pre_op' ? 'Pre-Op'
                                 : status === 'recovery' ? 'Recovery'

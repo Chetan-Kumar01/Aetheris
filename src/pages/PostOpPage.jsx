@@ -435,15 +435,17 @@ export default function PostOpPage() {
         try {
             const result = await getComplicationRisk({
                 patient_id: currentPatient?.id || 'p001',
-                surgery_type: preOpForm?.surgery_type || 'General',
-                age: preOpForm?.age ? Number(preOpForm.age) : 50,
-                asa_class: preOpForm?.asa_class || 'II',
+                surgery_type: preOpForm?.surgery_type || currentPatient?.surgery_type || 'General',
+                age: preOpForm?.age ? Number(preOpForm.age) : (currentPatient?.age || 50),
+                asa_class: preOpForm?.asa_class || currentPatient?.asa_class || 'II',
                 diabetes: preOpForm?.diabetes || false,
                 hypertension: preOpForm?.hypertension || false,
                 cardiac_hx: preOpForm?.cardiac_hx || false,
                 smoker: preOpForm?.smoking || false,
                 duration_min: currentSurgery?.duration_minutes || 180,
                 blood_loss_ml: currentSurgery?.estimated_blood_loss_ml || 300,
+                weight_kg: preOpForm?.weight_kg ? Number(preOpForm.weight_kg) : (currentPatient?.weight_kg || null),
+                height_cm: preOpForm?.height_cm ? Number(preOpForm.height_cm) : (currentPatient?.height_cm || null),
             })
             setComplicationData(result)
             setApiError(null) // Clear error on success
@@ -453,7 +455,7 @@ export default function PostOpPage() {
             setRiskLoading(false)
             setLoading('postop', false)
         }
-    }, [currentPatient, currentSurgery, setLoading])
+    }, [currentPatient, currentSurgery, preOpForm, setLoading])
 
     // Auto-fetch when patient changes
     useEffect(() => {

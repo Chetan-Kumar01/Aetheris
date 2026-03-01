@@ -186,6 +186,8 @@ class ComplicationRiskRequest(BaseModel):
     blood_loss_ml: Optional[float] = None
     asa_class:    Optional[str]   = None
     age:          Optional[int]   = None
+    weight_kg:    Optional[float] = None
+    height_cm:    Optional[float] = None
     diabetes:     bool = False
     hypertension: bool = False
     cardiac_hx:   bool = False

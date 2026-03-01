@@ -436,7 +436,142 @@ export default function PreOpPage() {
                 subtitle="Patient intake, AI risk assessment and pre-operative checklist"
                 icon={ClipboardCheck}
                 actionLabel="Export Summary"
-                onAction={() => { }}
+                onAction={() => {
+                    // Build a formatted Pre-Op summary text
+                    const lines = []
+                    const hr = '═'.repeat(55)
+                    const divider = '─'.repeat(55)
+
+                    lines.push(hr)
+                    lines.push('  AETHERIS — PRE-OP ASSESSMENT SUMMARY')
+                    lines.push(`  Generated: ${new Date().toLocaleString()}`)
+                    lines.push(hr)
+                    lines.push('')
+
+                    // Patient demographics
+                    lines.push('▎ PATIENT INFORMATION')
+                    lines.push(divider)
+                    lines.push(`  Name:        ${preOpForm.name || 'N/A'}`)
+                    lines.push(`  Age:         ${preOpForm.age || 'N/A'}`)
+                    lines.push(`  Gender:      ${preOpForm.gender || 'N/A'}`)
+                    if (preOpForm.weight_kg) lines.push(`  Weight:      ${preOpForm.weight_kg} kg`)
+                    if (preOpForm.height_cm) lines.push(`  Height:      ${preOpForm.height_cm} cm`)
+                    if (preOpForm.weight_kg && preOpForm.height_cm) {
+                        const bmi = (Number(preOpForm.weight_kg) / ((Number(preOpForm.height_cm) / 100) ** 2)).toFixed(1)
+                        lines.push(`  BMI:         ${bmi}`)
+                    }
+                    if (preOpForm.systolic_bp || preOpForm.diastolic_bp) {
+                        lines.push(`  Blood Pressure: ${preOpForm.systolic_bp || '—'}/${preOpForm.diastolic_bp || '—'} mmHg`)
+                    }
+                    lines.push('')
+
+                    // Surgery info
+                    lines.push('▎ SURGICAL DETAILS')
+                    lines.push(divider)
+                    lines.push(`  Surgery Type:     ${preOpForm.surgery_type || 'N/A'}`)
+                    lines.push(`  ASA Class:        ${preOpForm.asa_class || 'N/A'}`)
+                    lines.push('')
+
+                    // Medical history
+                    lines.push('▎ MEDICAL HISTORY')
+                    lines.push(divider)
+                    lines.push(`  Diabetes:         ${preOpForm.diabetes ? 'Yes' : 'No'}`)
+                    lines.push(`  Hypertension:     ${preOpForm.hypertension ? 'Yes' : 'No'}`)
+                    lines.push(`  Cardiac History:  ${preOpForm.cardiac_hx ? 'Yes' : 'No'}`)
+                    lines.push(`  Smoking:          ${preOpForm.smoking ? 'Yes' : 'No'}`)
+                    lines.push('')
+
+                    // Allergies & Medications
+                    lines.push('▎ ALLERGIES')
+                    lines.push(divider)
+                    const allergyList = preOpForm.allergies?.split(/[,\n]/).map(a => a.trim()).filter(Boolean)
+                    if (allergyList?.length) {
+                        allergyList.forEach(a => lines.push(`  • ${a}`))
+                    } else {
+                        lines.push('  None reported')
+                    }
+                    lines.push('')
+
+                    lines.push('▎ CURRENT MEDICATIONS')
+                    lines.push(divider)
+                    const medList = preOpForm.medications?.split(/[,\n]/).map(m => m.trim()).filter(Boolean)
+                    if (medList?.length) {
+                        medList.forEach(m => lines.push(`  • ${m}`))
+                    } else {
+                        lines.push('  None reported')
+                    }
+                    lines.push('')
+
+                    // AI Assessment results (if available)
+                    if (activeAssessment) {
+                        lines.push('▎ AI RISK ASSESSMENT')
+                        lines.push(divider)
+                        lines.push(`  Overall Risk Score: ${Math.round(activeAssessment.overall_risk_score ?? 0)} / 100`)
+                        lines.push(`  Risk Level:         ${activeAssessment.risk_level || 'N/A'}`)
+                        if (activeAssessment.asa_predicted) {
+                            lines.push(`  Predicted ASA:      ${activeAssessment.asa_predicted}`)
+                        }
+                        if (activeAssessment.risk_breakdown) {
+                            const rb = activeAssessment.risk_breakdown
+                            lines.push(`  Cardiac Risk:       ${Math.round(rb.cardiac_risk ?? 0)}%`)
+                            lines.push(`  Anesthesia Risk:    ${Math.round(rb.anesthesia_risk ?? 0)}%`)
+                            lines.push(`  Surgical Risk:      ${Math.round(rb.surgical_risk ?? 0)}%`)
+                        }
+                        if (activeAssessment.ai_summary) {
+                            lines.push('')
+                            lines.push(`  AI Summary: ${activeAssessment.ai_summary}`)
+                        }
+                        if (activeAssessment.recommendation) {
+                            lines.push(`  Recommendation: ${activeAssessment.recommendation}`)
+                        }
+                        lines.push('')
+
+                        // Drug interactions
+                        const interactions = activeAssessment.drug_interactions || []
+                        if (interactions.length > 0) {
+                            lines.push('▎ DRUG INTERACTIONS')
+                            lines.push(divider)
+                            interactions.forEach(di => {
+                                lines.push(`  ⚠ ${di.drug_a} + ${di.drug_b} [${di.severity}]`)
+                                lines.push(`    ${di.description}`)
+                            })
+                            lines.push('')
+                        }
+
+                        // Checklist
+                        const cl = activeAssessment.checklist || []
+                        if (cl.length > 0) {
+                            lines.push('▎ PRE-OP CHECKLIST')
+                            lines.push(divider)
+                            cl.forEach(item => {
+                                const mark = item.checked ? '✓' : '☐'
+                                const req = item.required ? ' (Required)' : ''
+                                lines.push(`  ${mark} ${item.label}${req}`)
+                            })
+                            lines.push('')
+                        }
+                    } else {
+                        lines.push('▎ AI RISK ASSESSMENT')
+                        lines.push(divider)
+                        lines.push('  Not yet performed — run the AI assessment first.')
+                        lines.push('')
+                    }
+
+                    lines.push(hr)
+                    lines.push('  End of Pre-Op Summary')
+                    lines.push(hr)
+
+                    // Trigger file download
+                    const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `preop_summary_${(preOpForm.name || 'patient').replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.txt`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                }}
             />
 
             <div className="grid grid-cols-3 gap-6">
