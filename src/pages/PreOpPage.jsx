@@ -633,8 +633,12 @@ export default function PreOpPage() {
                                 >
                                     <option value="Cardiac">Cardiac</option>
                                     <option value="Orthopedic">Orthopedic</option>
-                                    <option value="Neuro">Neuro</option>
+                                    <option value="Neurological">Neurological</option>
                                     <option value="General">General</option>
+                                    <option value="Vascular">Vascular</option>
+                                    <option value="Thoracic">Thoracic</option>
+                                    <option value="Abdominal">Abdominal</option>
+                                    <option value="Ophthalmic">Ophthalmic</option>
                                 </select>
                             </Field>
 
