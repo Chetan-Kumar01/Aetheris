@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
     Heart, Wind, Activity, Thermometer, Zap,
     FileText, Download, Send, Copy,
@@ -413,20 +413,26 @@ export default function PostOpPage() {
     // ── Complication Risk state ──────────────────────────
     const [complicationData, setComplicationData] = useState(null)
     const [riskLoading, setRiskLoading] = useState(false)
-    const [apiError, setApiError] = useState(null) // Added apiError state
+    const [apiError, setApiError] = useState(null)
 
     // ── Report state ─────────────────────────────────────
     const [activeReport, setActiveReport] = useState(null)
     const [reportContent, setReportContent] = useState('')
     const [reportLoading, setReportLoading] = useState(false)
-    const [reportStatus, setReportStatus] = useState(null)   // null | 'sent_to_ehr'
+    const [reportStatus, setReportStatus] = useState(null)
     const [sendingToEHR, setSendingToEHR] = useState(false)
 
-    // ── Toast helper (simple inline since no toast import in original) ──
-    const toast = {
-        success: (msg) => console.info('[toast:success]', msg),
-        error: (msg) => console.error('[toast:error]', msg),
-    }
+    // ── Discharge state ──
+    const [discharging, setDischarging] = useState(false)
+
+    // ── Visual toast ──
+    const [toastMsg, setToastMsg] = useState(null)
+    const toastTimerRef = useRef(null)
+    const showToast = useCallback((type, text) => {
+        clearTimeout(toastTimerRef.current)
+        setToastMsg({ type, text })
+        toastTimerRef.current = setTimeout(() => setToastMsg(null), type === 'error' ? 4500 : 3500)
+    }, [])
 
     // ── Fetch complication risk ───────────────────────────
     const fetchComplicationRisk = useCallback(async () => {
@@ -448,9 +454,9 @@ export default function PostOpPage() {
                 height_cm: preOpForm?.height_cm ? Number(preOpForm.height_cm) : (currentPatient?.height_cm || null),
             })
             setComplicationData(result)
-            setApiError(null) // Clear error on success
+            setApiError(null)
         } catch (err) {
-            setApiError(err?.message || 'Could not load complication risk data') // Set error on failure
+            setApiError(err?.message || 'Could not load complication risk data')
         } finally {
             setRiskLoading(false)
             setLoading('postop', false)
@@ -478,13 +484,13 @@ export default function PostOpPage() {
             })
             setActiveReport(result)
             setReportContent(result.content ?? JSON.stringify(result, null, 2))
-            toast.success('Report generated successfully!')
+            showToast('success', 'Report generated successfully!')
         } catch {
-            toast.error('Report generation failed. Is backend running?')
+            showToast('error', 'Report generation failed. Is backend running?')
         } finally {
             setReportLoading(false)
         }
-    }, [currentPatient, currentSurgery])
+    }, [currentPatient, currentSurgery, showToast])
 
     // ── Send to EHR ───────────────────────────────────────
     const handleSendToEHR = useCallback(async () => {
@@ -495,34 +501,61 @@ export default function PostOpPage() {
                 report_id: activeReport.id,
                 ehr_system: 'mock_ehr',
             })
-            toast.success(`Report sent! Confirmation: ${result.confirmation}`)
+            showToast('success', `Report sent! Confirmation: ${result.confirmation}`)
             setReportStatus('sent_to_ehr')
         } catch {
-            toast.error('Failed to send to EHR')
+            showToast('error', 'Failed to send to EHR')
         } finally {
             setSendingToEHR(false)
         }
-    }, [activeReport])
+    }, [activeReport, showToast])
 
     // ── Copy to clipboard ─────────────────────────────────
     const handleCopy = useCallback(async () => {
         if (!reportContent) return
         await navigator.clipboard.writeText(reportContent)
-        toast.success('Report copied to clipboard!')
-    }, [reportContent])
+        showToast('success', 'Report copied to clipboard!')
+    }, [reportContent, showToast])
+
+    // ── Discharge handler ─────────────────────────────────
+    const handleDischarge = useCallback(async () => {
+        if (!currentPatient?.id) {
+            showToast('error', 'No patient selected — select a patient first.')
+            return
+        }
+        setDischarging(true)
+        try {
+            const success = await dischargeCurrentPatient()
+            if (success) {
+                showToast('success', `${currentPatient.name || 'Patient'} discharged successfully!`)
+            } else {
+                showToast('error', 'Discharge failed — please try again.')
+            }
+        } catch (err) {
+            showToast('error', `Discharge error: ${err.message || 'Unknown error'}`)
+        } finally {
+            setDischarging(false)
+        }
+    }, [currentPatient, dischargeCurrentPatient, showToast])
 
     return (
         <div className="animate-fadeIn space-y-5">
+            {/* Toast banner */}
+            {toastMsg && (
+                <div className={`fixed top-6 right-6 z-50 px-5 py-3 rounded-xl text-sm font-semibold shadow-xl border transition-all animate-fadeIn
+                    ${toastMsg.type === 'success'
+                        ? 'bg-green-900/90 text-green-300 border-green-700/60'
+                        : 'bg-red-900/90 text-red-300 border-red-700/60'}`}>
+                    {toastMsg.type === 'success' ? '✓ ' : '✕ '}{toastMsg.text}
+                </div>
+            )}
+
             <SectionHeader
                 title="Post-Op & Recovery"
                 subtitle="Automated recovery monitoring, reports, and risk prediction"
                 icon={Activity}
-                actionLabel="Discharge Patient"
-                onAction={async () => {
-                    const success = await dischargeCurrentPatient()
-                    if (success) toast.success('Patient discharged successfully.')
-                    else toast.error('Failed to discharge patient.')
-                }}
+                actionLabel={discharging ? "Discharging…" : "Discharge Patient"}
+                onAction={handleDischarge}
             />
 
             {/* API error banner */}
