@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🏥 Aetheris — AI-Powered Surgical Operations Dashboard
 
@@ -392,4 +392,3 @@ This project is developed for educational and demonstration purposes.
 *Aetheris — Intelligent Surgical Care, Reimagined*
 
 </div>
-]]>
